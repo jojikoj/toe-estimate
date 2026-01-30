@@ -1234,7 +1234,7 @@ function EstimateList({ estimates, onView, onCreateInvoice, onCreateEstimate, on
   const formData = editingEstimate || newEstimate;
   const setFormData = editingEstimate ? setEditingEstimate : setNewEstimate;
 
-  // AI見積生成（Claude.ai Artifact内で動作）
+  // AI見積生成（Vercel API Route経由）
   const handleAiGenerate = async () => {
     if (!aiPrompt.trim()) {
       alert('見積内容を入力してください');
@@ -1245,61 +1245,24 @@ function EstimateList({ estimates, onView, onCreateInvoice, onCreateEstimate, on
     setAiResult(null);
     
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("/api/generate-estimate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          messages: [
-            { 
-              role: "user", 
-              content: `あなたはWeb制作・システム開発・コンサルティング会社の見積作成AIアシスタントです。
-以下の依頼内容から、適切な見積明細を作成してください。
-
-【依頼内容】
-${aiPrompt}
-
-【出力形式】
-必ず以下のJSON形式のみで回答してください。説明文は不要です。
-{
-  "clientName": "クライアント名（推測または「要確認」）",
-  "projectName": "案件名",
-  "items": [
-    {"name": "項目名", "quantity": 数量, "unitPrice": 単価（円）}
-  ],
-  "notes": "備考（あれば）",
-  "probability": 成約確度（30-80の数値）
-}
-
-【単価の目安】
-- Webサイトデザイン: 200,000〜500,000円
-- コーディング: 100,000〜300,000円
-- システム開発: 300,000〜1,000,000円
-- コンサルティング: 100,000〜300,000円/月
-- 保守運用: 30,000〜100,000円/月
-- AI導入支援: 200,000〜500,000円`
-            }
-          ],
-        })
+        body: JSON.stringify({ prompt: aiPrompt }),
       });
 
-      const data = await response.json();
-      const text = data.content?.map(item => item.text || "").join("") || "";
-      
-      // JSONを抽出してパース
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        setAiResult(parsed);
-      } else {
-        throw new Error('JSONの解析に失敗しました');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'AI生成に失敗しました');
       }
+
+      const result = await response.json();
+      setAiResult(result);
     } catch (error) {
       console.error('AI見積生成エラー:', error);
-      alert('AI見積アシスタントはClaude.aiのArtifact内でのみ動作します。\n\nStackBlitz等の外部環境では、手動で見積を作成してください。');
+      alert('AI見積の生成に失敗しました。\n\n' + error.message);
     } finally {
       setAiLoading(false);
     }
